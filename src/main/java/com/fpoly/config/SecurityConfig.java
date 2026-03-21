@@ -1,64 +1,66 @@
 package com.fpoly.config;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.savedrequest.DefaultSavedRequest;
+
+import jakarta.servlet.http.HttpSession;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // Của Bài 2
 public class SecurityConfig {
 
-	// LƯU Ý: Ở Bài 3, chúng ta đã xóa hàm @Bean UserDetailsService.
-	// Spring Security sẽ tự động tìm và sử dụng class DaoUserDetailsManager (có gắn @Service) để xác thực.
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        
+        // 1. Tắt CSRF và CORS (Của Bài 2)
+        http.csrf(csrf -> csrf.disable()).cors(cors -> cors.disable());
 
-	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-		// Bỏ cấu hình mặc định CSRF và CORS
-		http.csrf(config -> config.disable()).cors(config -> config.disable());
-        
-		// Phân quyền truy xuất theo vai trò 
-		http.authorizeHttpRequests(config -> {
-			config.requestMatchers("/poly/url1").authenticated(); 
-			config.requestMatchers("/poly/url2").hasRole("USER");
-			config.requestMatchers("/poly/url3").hasRole("ADMIN");
-			config.requestMatchers("/poly/url4").hasAnyRole("USER", "ADMIN");
-			config.anyRequest().permitAll(); 
-		});
+        // 2. KHAI BÁO BẮT BUỘC ĐỂ TRÁNH LỖI (Của Bài 2)
+        // Mở cửa cho tất cả các đường dẫn, việc chặn sẽ do @PreAuthorize lo
+        http.authorizeHttpRequests(req -> req
+            .anyRequest().permitAll() 
+        );
 
-        // Cấu hình xử lý từ chối truy xuất (Access Denied)
-		http.exceptionHandling(config -> {
-			config.accessDeniedPage("/access-denied.html");
-		});
+        // 3. Cấu hình đăng nhập OAuth2 (Của Bài 1)
+        http.oauth2Login(login -> login
+            .permitAll()
+            .successHandler((request, response, authentication) -> {
+                // Lấy thông tin user từ Google trả về
+                DefaultOidcUser oidcUser = (DefaultOidcUser) authentication.getPrincipal();
+                String username = oidcUser.getEmail(); 
+                String role = "OAUTH"; 
 
-		// Các cấu hình Form đăng nhập
-		http.formLogin(config -> {
-			config.loginPage("/login/form");
-			config.loginProcessingUrl("/login/check");
-			config.defaultSuccessUrl("/", false);
-			config.failureUrl("/login/failure");
-			config.permitAll();
-			config.usernameParameter("username");
-			config.passwordParameter("password");
-		});
+                // Tạo đối tượng UserDetails mới 
+                UserDetails newUser = User.withUsername(username)
+                        .password("{noop}") 
+                        .roles(role)
+                        .build();
+
+                // Set Authentication mới vào Context
+                Authentication newAuth = new UsernamePasswordAuthenticationToken(
+                        newUser, null, newUser.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(newAuth);
+
+                // Chuyển hướng
+                HttpSession session = request.getSession();
+                String attr = "SPRING_SECURITY_SAVED_REQUEST";
+                DefaultSavedRequest req = (DefaultSavedRequest) session.getAttribute(attr);
+                String redirectUrl = (req == null) ? "/" : req.getRedirectUrl();
+                response.sendRedirect(redirectUrl);
+            })
+        );
         
-		// Cấu hình Ghi nhớ tài khoản (Remember Me)
-		http.rememberMe(config -> {
-			config.tokenValiditySeconds(3 * 24 * 60 * 60); 
-			config.rememberMeCookieName("remember-me");
-			config.rememberMeParameter("remember-me");
-		});
-        
-		// Cấu hình Đăng xuất (Logout)
-		http.logout(config -> {
-			config.logoutUrl("/logout");
-			config.logoutSuccessUrl("/login/exit");
-			config.clearAuthentication(true);
-			config.invalidateHttpSession(true);
-			config.deleteCookies("remember-me");
-		});
-        
-		return http.build();
-	}
+        return http.build();
+    }
 }
