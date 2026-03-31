@@ -1,21 +1,42 @@
 package com.fpoly.controller;
 
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
-@Controller
+import com.fpoly.service.JwtService;
+
+import java.util.Map;
+
+@RestController
 public class LoginController {
-    
-    @RequestMapping("/login/{action}")
-    public String login(Model model, @PathVariable("action") String action) {
-        switch(action) {
-            case "form" -> model.addAttribute("message", "Vui lòng đăng nhập");
-            case "success" -> model.addAttribute("message", "Đăng nhập thành công");
-            case "failure" -> model.addAttribute("message", "Sai thông tin đăng nhập");
-            case "exit" -> model.addAttribute("message", "Đăng xuất thành công");
+
+    @Autowired
+    AuthenticationManager authenticationManager;
+
+    @Autowired
+    JwtService jwtService;
+
+    @PostMapping("/poly/login")
+    public Object login(@RequestBody Map<String, String> userInfo) {
+        String username = userInfo.get("username");
+        String password = userInfo.get("password");
+        
+        var authInfo = new UsernamePasswordAuthenticationToken(username, password);
+        var authentication = authenticationManager.authenticate(authInfo);
+
+        if (authentication.isAuthenticated()) {
+            UserDetails user = (UserDetails) authentication.getPrincipal();
+            // Token có hiệu lực 20 phút (20 * 60 giây)
+            String token = jwtService.create(user, 20 * 60); 
+            return Map.of("token", token);
         }
-        return "login";
+        
+        throw new UsernameNotFoundException("Username not found!");
     }
 }

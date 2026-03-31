@@ -1,131 +1,122 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Quản lý sinh viên - VueJS</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Poly API - JWT</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .btn-group { margin-bottom: 20px; }
+        button { padding: 10px 15px; margin-right: 10px; margin-bottom: 10px; cursor: pointer; }
+        #result { background: #f4f4f4; padding: 15px; border: 1px solid #ddd; min-height: 100px; white-space: pre-wrap; font-family: monospace;}
+        .highlight { color: #d9534f; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <div id="app" class="container mt-5">
-        <h2 class="text-primary mb-4">Quản Lý Sinh Viên (VueJS + API)</h2>
-        
-        <div class="card mb-4">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label>Mã SV</label>
-                        <input v-model="form.id" type="text" class="form-control" :disabled="isEdit">
-                    </div>
-                    <div class="col-md-3">
-                        <label>Họ Tên</label>
-                        <input v-model="form.name" type="text" class="form-control">
-                    </div>
-                    <div class="col-md-3">
-                        <label>Điểm</label>
-                        <input v-model="form.mark" type="number" step="0.1" class="form-control">
-                    </div>
-                    <div class="col-md-3">
-                        <label>Giới tính</label>
-                        <select v-model="form.gender" class="form-select">
-                            <option :value="true">Nam</option>
-                            <option :value="false">Nữ</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <button v-if="!isEdit" @click="saveStudent" class="btn btn-success me-2">Thêm Mới</button>
-                    <button v-if="isEdit" @click="updateStudent" class="btn btn-warning me-2">Cập Nhật</button>
-                    <button @click="resetForm" class="btn btn-secondary">Làm Mới</button>
-                </div>
-            </div>
-        </div>
 
-        <table class="table table-bordered table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Mã SV</th>
-                    <th>Họ Tên</th>
-                    <th>Điểm</th>
-                    <th>Giới Tính</th>
-                    <th>Hành Động</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="sv in students" :key="sv.id">
-                    <td>{{ sv.id }}</td>
-                    <td>{{ sv.name }}</td>
-                    <td>{{ sv.mark }}</td>
-                    <td>{{ sv.gender ? 'Nam' : 'Nữ' }}</td>
-                    <td>
-                        <button @click="editStudent(sv)" class="btn btn-sm btn-info me-2">Sửa</button>
-                        <button @click="deleteStudent(sv.id)" class="btn btn-sm btn-danger">Xóa</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <h2>Kiểm thử REST API với JWT (Spring Security)</h2>
+    
+    <div class="btn-group">
+        <button onclick="login()" style="background-color: #5cb85c; color: white; border: none;">1. Đăng nhập (Lấy Token)</button>
     </div>
 
-    <script>
-        const { createApp } = Vue;
-        const API_URL = "http://localhost:8181/students";
+    <div class="btn-group">
+        <button onclick="gotoUrl0()">Test URL 0 (Permit All)</button>
+        <button onclick="gotoUrl1()">Test URL 1 (Authenticated)</button>
+        <button onclick="gotoUrl2()">Test URL 2 (Role USER)</button>
+        <button onclick="gotoUrl3()">Test URL 3 (Role ADMIN)</button>
+        <button onclick="gotoUrl4()">Test URL 4 (Role USER hoặc ADMIN)</button>
+    </div>
 
-        createApp({
-            data() {
-                return {
-                    students: [], // Chứa danh sách SV từ API
-                    form: { id: '', name: '', mark: 0, gender: true }, // Dữ liệu form
-                    isEdit: false // Trạng thái: đang thêm mới hay cập nhật
+    <h3>Kết quả trả về:</h3>
+    <div id="result">Kết quả sẽ hiển thị ở đây...</div>
+
+    <script>
+        // Biến toàn cục lưu trữ token
+        let token = ""; 
+
+        // Hàm hỗ trợ in kết quả ra màn hình HTML
+        function printResult(message, data) {
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = `<span class="highlight">${message}</span>\n\n${JSON.stringify(data, null, 2)}`;
+            console.log(message, data);
+        }
+
+        // 1. Hàm Đăng nhập
+        function login() {
+            var url = "http://localhost:8181/poly/login";
+            var data = {
+                "username": "user@gmail.com", // Bạn có thể đổi thành admin@gmail.com hoặc both@gmail.com để test các quyền khác nhau
+                "password": "123"
+            };
+            
+            axios.post(url, data).then(resp => {
+                token = resp.data.token; // Lưu token lại
+                printResult("POST /poly/login -> THÀNH CÔNG (Đã lưu Token)", resp.data);
+            }).catch(error => {
+                printResult("POST /poly/login -> LỖI", error.response ? error.response.data : error.message);
+            });
+        }
+
+        // 2. Hàm gọi URL 0 (Không cần bảo mật)
+        function gotoUrl0() {
+            var url = 'http://localhost:8181/poly/url0';
+            axios.get(url).then(resp => {
+                printResult("GET /poly/url0 -> THÀNH CÔNG", resp.data);
+            }).catch(error => {
+                printResult("GET /poly/url0 -> LỖI", error.response ? error.response.status : error.message);
+            });
+        }
+
+        // Cấu hình Header chứa Token dùng chung cho các URL yêu cầu xác thực
+        function getAuthHeader() {
+            return {
+                headers: {
+                    "Authorization": `Bearer ${token}`
                 }
-            },
-            mounted() {
-                // Chạy ngay khi load trang
-                this.loadStudents();
-            },
-            methods: {
-                // Tương ứng GET
-                loadStudents() {
-                    axios.get(API_URL).then(response => {
-                        this.students = response.data;
-                    }).catch(error => console.error("Lỗi tải dữ liệu", error));
-                },
-                // Tương ứng POST
-                saveStudent() {
-                    axios.post(API_URL, this.form).then(response => {
-                        this.loadStudents(); // Tải lại bảng
-                        this.resetForm();    // Xóa trắng form
-                        alert("Thêm thành công!");
-                    }).catch(error => console.error("Lỗi thêm", error));
-                },
-                // Đưa dữ liệu lên form để chuẩn bị sửa
-                editStudent(student) {
-                    this.form = { ...student }; // Copy object để tránh lỗi bind 2 chiều
-                    this.isEdit = true;
-                },
-                // Tương ứng PUT
-                updateStudent() {
-                    axios.put(`${API_URL}/${this.form.id}`, this.form).then(response => {
-                        this.loadStudents();
-                        this.resetForm();
-                        alert("Cập nhật thành công!");
-                    }).catch(error => console.error("Lỗi cập nhật", error));
-                },
-                // Tương ứng DELETE
-                deleteStudent(id) {
-                    if (confirm("Bạn có chắc chắn muốn xóa SV này?")) {
-                        axios.delete(`${API_URL}/${id}`).then(response => {
-                            this.loadStudents();
-                            alert("Xóa thành công!");
-                        }).catch(error => console.error("Lỗi xóa", error));
-                    }
-                },
-                resetForm() {
-                    this.form = { id: '', name: '', mark: 0, gender: true };
-                    this.isEdit = false;
-                }
-            }
-        }).mount('#app')
+            };
+        }
+
+        // 3. Hàm gọi URL 1 (Yêu cầu đăng nhập)
+        function gotoUrl1() {
+            var url = 'http://localhost:8181/poly/url1';
+            axios.get(url, getAuthHeader()).then(resp => {
+                printResult("GET /poly/url1 -> THÀNH CÔNG", resp.data);
+            }).catch(error => {
+                printResult("GET /poly/url1 -> LỖI (Có thể do chưa có Token hoặc sai Token)", error.response ? error.response.status : error.message);
+            });
+        }
+
+        // 4. Hàm gọi URL 2 (Yêu cầu Role USER)
+        function gotoUrl2() {
+            var url = 'http://localhost:8181/poly/url2';
+            axios.get(url, getAuthHeader()).then(resp => {
+                printResult("GET /poly/url2 -> THÀNH CÔNG", resp.data);
+            }).catch(error => {
+                printResult("GET /poly/url2 -> LỖI (Lỗi 403: Không đủ quyền truy cập)", error.response ? error.response.status : error.message);
+            });
+        }
+
+        // 5. Hàm gọi URL 3 (Yêu cầu Role ADMIN)
+        function gotoUrl3() {
+            var url = 'http://localhost:8181/poly/url3';
+            axios.get(url, getAuthHeader()).then(resp => {
+                printResult("GET /poly/url3 -> THÀNH CÔNG", resp.data);
+            }).catch(error => {
+                printResult("GET /poly/url3 -> LỖI (Lỗi 403: Không đủ quyền truy cập)", error.response ? error.response.status : error.message);
+            });
+        }
+
+        // 6. Hàm gọi URL 4 (Yêu cầu Role USER hoặc ADMIN)
+        function gotoUrl4() {
+            var url = 'http://localhost:8181/poly/url4';
+            axios.get(url, getAuthHeader()).then(resp => {
+                printResult("GET /poly/url4 -> THÀNH CÔNG", resp.data);
+            }).catch(error => {
+                printResult("GET /poly/url4 -> LỖI (Lỗi 403: Không đủ quyền truy cập)", error.response ? error.response.status : error.message);
+            });
+        }
     </script>
 </body>
 </html>

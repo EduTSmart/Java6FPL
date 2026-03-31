@@ -1,66 +1,69 @@
 package com.fpoly.config;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.savedrequest.DefaultSavedRequest;
-
-import jakarta.servlet.http.HttpSession;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // Của Bài 2
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public PasswordEncoder passwordEncoder() {
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService(PasswordEncoder pe) {
+        UserDetails user1 = User.withUsername("user@gmail.com")
+                .password(pe.encode("123")).roles("USER").build();
+        UserDetails user2 = User.withUsername("admin@gmail.com")
+                .password(pe.encode("123")).roles("ADMIN").build();
+        UserDetails user3 = User.withUsername("both@gmail.com")
+                .password(pe.encode("123")).roles("USER", "ADMIN").build();
         
-        // 1. Tắt CSRF và CORS (Của Bài 2)
-        http.csrf(csrf -> csrf.disable()).cors(cors -> cors.disable());
+        return new InMemoryUserDetailsManager(user1, user2, user3);
+    }
 
-        // 2. KHAI BÁO BẮT BUỘC ĐỂ TRÁNH LỖI (Của Bài 2)
-        // Mở cửa cho tất cả các đường dẫn, việc chặn sẽ do @PreAuthorize lo
-        http.authorizeHttpRequests(req -> req
-            .anyRequest().permitAll() 
-        );
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter) throws Exception {
+        http.csrf(config -> config.disable()).cors(config -> config.disable());
 
-        // 3. Cấu hình đăng nhập OAuth2 (Của Bài 1)
-        http.oauth2Login(login -> login
-            .permitAll()
-            .successHandler((request, response, authentication) -> {
-                // Lấy thông tin user từ Google trả về
-                DefaultOidcUser oidcUser = (DefaultOidcUser) authentication.getPrincipal();
-                String username = oidcUser.getEmail(); 
-                String role = "OAUTH"; 
+        http.authorizeHttpRequests(config -> {
+            config.requestMatchers("/poly/url1").authenticated();
+            config.requestMatchers("/poly/url2").hasRole("USER");
+            config.requestMatchers("/poly/url3").hasRole("ADMIN");
+            config.requestMatchers("/poly/url4").hasAnyRole("USER", "ADMIN");
+            config.anyRequest().permitAll(); // Bao gồm cả /poly/url0 và /poly/login
+        });
 
-                // Tạo đối tượng UserDetails mới 
-                UserDetails newUser = User.withUsername(username)
-                        .password("{noop}") 
-                        .roles(role)
-                        .build();
+        // Bỏ duy trì user trong session (vì dùng JWT)
+        http.sessionManagement(session -> {
+            session.sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+        });
 
-                // Set Authentication mới vào Context
-                Authentication newAuth = new UsernamePasswordAuthenticationToken(
-                        newUser, null, newUser.getAuthorities());
-                SecurityContextHolder.getContext().setAuthentication(newAuth);
+        http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
-                // Chuyển hướng
-                HttpSession session = request.getSession();
-                String attr = "SPRING_SECURITY_SAVED_REQUEST";
-                DefaultSavedRequest req = (DefaultSavedRequest) session.getAttribute(attr);
-                String redirectUrl = (req == null) ? "/" : req.getRedirectUrl();
-                response.sendRedirect(redirectUrl);
-            })
-        );
-        
         return http.build();
     }
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+
 }

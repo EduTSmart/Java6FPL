@@ -7,7 +7,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-@Service // Đánh dấu đây là Service để Spring tự động quản lý
+
 public class DaoUserDetailsManager implements UserDetailsService {
 
     @Autowired
